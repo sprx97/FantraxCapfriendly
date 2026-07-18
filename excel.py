@@ -85,6 +85,7 @@ class ExcelGraphPublisher:
         item_id: str,
         worksheet: str,
         table_name: str = "",
+        create_worksheet: bool = False,
     ):
         self.session = _http_session()
         self.session.headers.update({"Authorization": f"Bearer {token}"})
@@ -95,6 +96,31 @@ class ExcelGraphPublisher:
         )
         self.sheet_url = (
             f"{self.workbook_url}/worksheets/{quote(worksheet, safe='')}"
+        )
+        if create_worksheet:
+            self.sheet_url = self._ensure_worksheet(worksheet)
+
+    def _ensure_worksheet(self, worksheet: str) -> str:
+        response = self.session.get(self.sheet_url, timeout=60)
+        if response.status_code == 404:
+            response = self.session.post(
+                f"{self.workbook_url}/worksheets/add",
+                json={"name": worksheet},
+                timeout=60,
+            )
+        if not response.ok:
+            raise RuntimeError(
+                "Microsoft Graph could not get or create worksheet "
+                f"{worksheet!r}: {response.status_code} {response.text}"
+            )
+        worksheet_id = response.json().get("id")
+        if not worksheet_id:
+            raise RuntimeError(
+                f"Microsoft Graph returned no ID for worksheet {worksheet!r}"
+            )
+        return (
+            f"{self.workbook_url}/worksheets/"
+            f"{quote(worksheet_id, safe='')}"
         )
 
     def _request(self, method: str, suffix: str, **kwargs) -> requests.Response:
@@ -184,16 +210,30 @@ class ExcelGraphPublisher:
 def publish_grid_to_excel(
     headers: Sequence[str],
     rows: Sequence[Sequence[object]],
+    summary_headers: Sequence[str],
+    summary_rows: Sequence[Sequence[object]],
 ) -> None:
     required = ("AZURE_DRIVE_ID", "AZURE_WORKBOOK_ITEM_ID", "AZURE_WORKSHEET_NAME")
     missing = [name for name in required if not getattr(config, name, "")]
     if missing:
         raise RuntimeError(f"Azure upload is not configured; set {', '.join(missing)}")
+    token = _acquire_azure_token()
     publisher = ExcelGraphPublisher(
-        _acquire_azure_token(),
+        token,
         config.AZURE_DRIVE_ID,
         config.AZURE_WORKBOOK_ITEM_ID,
         config.AZURE_WORKSHEET_NAME,
         getattr(config, "AZURE_TABLE_NAME", ""),
     )
     publisher.replace_grid([list(headers), *[list(row) for row in rows]])
+    summary_publisher = ExcelGraphPublisher(
+        token,
+        config.AZURE_DRIVE_ID,
+        config.AZURE_WORKBOOK_ITEM_ID,
+        getattr(config, "AZURE_CAP_SUMMARY_WORKSHEET_NAME", "Cap Summary"),
+        create_worksheet=True,
+    )
+    summary_publisher.replace_grid([
+        list(summary_headers),
+        *[list(row) for row in summary_rows],
+    ])

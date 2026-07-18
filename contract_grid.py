@@ -8,6 +8,7 @@ from capwages import capwages_player_url
 from models import CapHitPenalty, ContractProvider, Player
 
 DEFAULT_GRID_YEARS = 8
+CAP_SUMMARY_STATUSES = ("Active", "Reserve", "Cap Hit")
 ROSTER_STATUS_ORDER = {
     "active": 0,
     "reserve": 1,
@@ -100,6 +101,62 @@ def build_contract_grid(
 
     rows.sort(key=row_sort_key)
     return headers, rows
+
+def build_cap_summary(
+    headers: Sequence[str],
+    rows: Sequence[Sequence[str | int]],
+    source_worksheet: str,
+) -> tuple[list[str], list[list[str | int]]]:
+    """Build an Excel summary whose formulas reference the contract worksheet."""
+
+    owner_column = headers.index("Owner")
+    status_column = headers.index("Roster Status")
+    first_season_column = headers.index("Age") + 1
+    season_headers = list(headers[first_season_column:])
+    owner_count = len({
+        str(row[owner_column])
+        for row in rows
+        if row[owner_column]
+    })
+    last_source_row = len(rows) + 1
+    sheet = "'" + source_worksheet.replace("'", "''") + "'"
+
+    def column_name(index: int) -> str:
+        result = ""
+        number = index + 1
+        while number:
+            number, remainder = divmod(number - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+
+    owner_letter = column_name(owner_column)
+    status_letter = column_name(status_column)
+    owner_range = (
+        f"{sheet}!${owner_letter}$2:${owner_letter}${last_source_row}"
+    )
+    status_range = (
+        f"{sheet}!${status_letter}$2:${status_letter}${last_source_row}"
+    )
+    summary_rows: list[list[str | int]] = []
+    for excel_row in range(2, owner_count + 2):
+        owner_formula = (
+            "=IFERROR(INDEX(SORT(UNIQUE(FILTER("
+            f"{owner_range},{owner_range}<>\"\"))),ROW()-1),\"\")"
+        )
+        totals = []
+        for column in range(first_season_column, len(headers)):
+            cap_letter = column_name(column)
+            cap_range = (
+                f"{sheet}!${cap_letter}$2:${cap_letter}${last_source_row}"
+            )
+            sumifs = "+".join(
+                f'SUMIFS({cap_range},{owner_range},$A{excel_row},'
+                f'{status_range},"{status}")'
+                for status in CAP_SUMMARY_STATUSES
+            )
+            totals.append(f'=IF($A{excel_row}="","",{sumifs})')
+        summary_rows.append([owner_formula, *totals])
+    return ["Owner", *season_headers], summary_rows
 
 def write_grid_csv(
     path: Path,

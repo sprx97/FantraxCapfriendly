@@ -19,6 +19,7 @@ AZURE_USER = ""
 AZURE_DRIVE_ID = ""
 AZURE_WORKBOOK_ITEM_ID = ""
 AZURE_WORKSHEET_NAME = ""
+AZURE_CAP_SUMMARY_WORKSHEET_NAME = "Cap Summary"
 # Optional when the worksheet contains exactly one table.
 AZURE_TABLE_NAME = ""
 AZURE_AUTHORITY = "https://login.microsoftonline.com/consumers"

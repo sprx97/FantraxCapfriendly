@@ -1,0 +1,9 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+CRON_TZ=America/New_York
+
+# m h dom mon dow user command
+
+# Refresh the Fantrax contract grid and cap summary once a day.
+0 6 * * *     root      cd /home/jeremy/kkupdl && /home/jeremy/kkupdl/kkupdl.venv/bin/python /home/jeremy/kkupdl/main.py --update >> /home/jeremy/kkupdl/cronjob.log 2>&1

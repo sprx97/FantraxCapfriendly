@@ -6,6 +6,7 @@ import config
 from capwages import CachedCapWagesProvider, refresh_capwages_cache
 from contract_grid import (
     DEFAULT_GRID_YEARS,
+    build_cap_summary,
     build_contract_grid,
     current_season_start_year,
     write_grid_csv,
@@ -88,8 +89,26 @@ def main() -> None:
             "Fantrax players; their contract years were left blank"
         )
     if args.upload:
-        publish_grid_to_excel(headers, rows)
-        print(f"Published grid to worksheet {config.AZURE_WORKSHEET_NAME!r}")
+        summary_headers, summary_rows = build_cap_summary(
+            headers,
+            rows,
+            config.AZURE_WORKSHEET_NAME,
+        )
+        publish_grid_to_excel(
+            headers,
+            rows,
+            summary_headers,
+            summary_rows,
+        )
+        summary_sheet = getattr(
+            config,
+            "AZURE_CAP_SUMMARY_WORKSHEET_NAME",
+            "Cap Summary",
+        )
+        print(
+            f"Published grid to worksheet {config.AZURE_WORKSHEET_NAME!r} "
+            f"and {len(summary_rows)} cap-summary rows to {summary_sheet!r}"
+        )
 
 if __name__ == "__main__":
     main()
