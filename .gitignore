@@ -1,0 +1,5 @@
+kkupdl.venv/*
+config.py
+__pycache__/
+.cache/
+outputs/*.csv
