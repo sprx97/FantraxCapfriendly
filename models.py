@@ -30,6 +30,14 @@ class ContractSnapshot:
     current: ContractTerm
     future: tuple[ContractTerm, ...] = ()
 
+@dataclass(frozen=True)
+class CapHitPenalty:
+    player_name: str
+    owner: str
+    amount: int
+    start_year: int
+    end_year: int
+
 class ContractProvider(Protocol):
     def get_contracts(
         self,

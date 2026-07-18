@@ -10,7 +10,11 @@ from contract_grid import (
     write_grid_csv,
 )
 from excel import publish_grid_to_excel
-from fantrax import download_fantrax_csv, load_fantrax_players
+from fantrax import (
+    download_cap_hit_penalties,
+    download_fantrax_csv,
+    load_fantrax_players,
+)
 from puckpedia import PlaceholderPuckPediaProvider
 
 PROJECT_ROOT = Path(getattr(config, "PROJECT_ROOT", "") or Path(__file__).parent)
@@ -47,14 +51,17 @@ def main() -> None:
         print("Downloading Fantrax player data...")
         download_fantrax_csv(input_path)
     players = load_fantrax_players(input_path)
+    print("Downloading Fantrax cap-hit penalties...")
+    cap_hit_penalties = download_cap_hit_penalties(args.season_start_year)
     headers, rows = build_contract_grid(
         players,
         PlaceholderPuckPediaProvider(),
         args.season_start_year,
         args.years,
+        cap_hit_penalties,
     )
     write_grid_csv(args.output, headers, rows)
-    print(f"Wrote {len(rows)} players to {args.output}")
+    print(f"Wrote {len(rows)} rows to {args.output}")
     if args.upload:
         publish_grid_to_excel(headers, rows)
         print(f"Published grid to worksheet {config.AZURE_WORKSHEET_NAME!r}")

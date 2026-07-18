@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from models import ContractProvider, Player
+from models import CapHitPenalty, ContractProvider, Player
 from puckpedia import puckpedia_player_url
 
 DEFAULT_GRID_YEARS = 8
@@ -36,6 +36,7 @@ def build_contract_grid(
     provider: ContractProvider,
     season_start_year: int,
     grid_years: int = DEFAULT_GRID_YEARS,
+    cap_hit_penalties: Iterable[CapHitPenalty] = (),
 ) -> tuple[list[str], list[list[str | int]]]:
     if grid_years < 1:
         raise ValueError("grid_years must be at least 1")
@@ -64,6 +65,21 @@ def build_contract_grid(
             player.roster_status,
             player.age if player.age is not None else "",
             *(cap_hits.get(year, "") for year in seasons),
+        ])
+    for penalty in cap_hit_penalties:
+        rows.append([
+            f"{penalty.player_name} Retention",
+            "",
+            "",
+            penalty.owner,
+            "Cap Hit",
+            "",
+            *(
+                penalty.amount
+                if penalty.start_year <= year <= penalty.end_year
+                else ""
+                for year in seasons
+            ),
         ])
     owner_column = headers.index("Owner")
     roster_status_column = headers.index("Roster Status")
