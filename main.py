@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 
 import config
+from capwages import CachedCapWagesProvider, refresh_capwages_cache
 from contract_grid import (
     DEFAULT_GRID_YEARS,
     build_contract_grid,
@@ -15,11 +16,11 @@ from fantrax import (
     download_fantrax_csv,
     load_fantrax_players,
 )
-from puckpedia import PlaceholderPuckPediaProvider
 
 PROJECT_ROOT = Path(getattr(config, "PROJECT_ROOT", "") or Path(__file__).parent)
 FANTRAX_EXPORT_FILE = PROJECT_ROOT / "outputs" / "fantrax_export.csv"
 GRID_OUTPUT_FILE = PROJECT_ROOT / "outputs" / "player_contract_grid.csv"
+CAPWAGES_CACHE_FILE = PROJECT_ROOT / ".cache" / "capwages_contracts.json"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -29,6 +30,17 @@ def parse_args() -> argparse.Namespace:
         help="Use an existing Fantrax CSV instead of downloading",
     )
     parser.add_argument("--output", type=Path, default=GRID_OUTPUT_FILE)
+    parser.add_argument(
+        "--capwages-cache",
+        type=Path,
+        default=CAPWAGES_CACHE_FILE,
+        help="Path to the cached CapWages contract JSON",
+    )
+    parser.add_argument(
+        "--refresh-capwages",
+        action="store_true",
+        help="Refresh the contract cache by scraping all 32 CapWages team pages",
+    )
     parser.add_argument("--years", type=int, default=DEFAULT_GRID_YEARS)
     parser.add_argument(
         "--season-start-year",
@@ -51,17 +63,30 @@ def main() -> None:
         print("Downloading Fantrax player data...")
         download_fantrax_csv(input_path)
     players = load_fantrax_players(input_path)
+    if args.refresh_capwages:
+        print("Refreshing CapWages contract cache from 32 team pages...")
+        cached_players = refresh_capwages_cache(
+            args.capwages_cache,
+            args.season_start_year,
+        )
+        print(f"Cached {cached_players} CapWages players")
+    contract_provider = CachedCapWagesProvider(args.capwages_cache)
     print("Downloading Fantrax cap-hit penalties...")
     cap_hit_penalties = download_cap_hit_penalties(args.season_start_year)
     headers, rows = build_contract_grid(
         players,
-        PlaceholderPuckPediaProvider(),
+        contract_provider,
         args.season_start_year,
         args.years,
         cap_hit_penalties,
     )
     write_grid_csv(args.output, headers, rows)
     print(f"Wrote {len(rows)} rows to {args.output}")
+    if contract_provider.unmatched_names:
+        print(
+            f"No CapWages match for {len(contract_provider.unmatched_names)} "
+            "Fantrax players; their contract years were left blank"
+        )
     if args.upload:
         publish_grid_to_excel(headers, rows)
         print(f"Published grid to worksheet {config.AZURE_WORKSHEET_NAME!r}")

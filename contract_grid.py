@@ -4,8 +4,8 @@ from datetime import date
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from capwages import capwages_player_url
 from models import CapHitPenalty, ContractProvider, Player
-from puckpedia import puckpedia_player_url
 
 DEFAULT_GRID_YEARS = 8
 ROSTER_STATUS_ORDER = {
@@ -28,7 +28,7 @@ def excel_hyperlink_formula(name: str) -> str:
     """Create an Excel-safe hyperlink formula displaying the player's name."""
 
     escaped_name = name.replace('"', '""')
-    url = puckpedia_player_url(name)
+    url = capwages_player_url(name)
     return f'=HYPERLINK("{url}","{escaped_name}")'
 
 def build_contract_grid(
