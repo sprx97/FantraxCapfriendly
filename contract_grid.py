@@ -44,13 +44,15 @@ def build_contract_grid(
     seasons = list(range(season_start_year, season_start_year + grid_years))
     headers = [
         "Name", "Team", "Position", "Owner", "Roster Status", "Age",
+        "Start Year",
         *(season_label(year) for year in seasons),
     ]
     rows = []
     for player in players:
         snapshot = provider.get_contracts(player, season_start_year)
         cap_hits = {}
-        for term in (snapshot.current, *snapshot.future):
+        terms = (snapshot.current, *snapshot.future)
+        for term in terms:
             for offset, cap_hit in enumerate(term.cap_hits):
                 year = term.start_year + offset
                 if year in cap_hits:
@@ -58,6 +60,17 @@ def build_contract_grid(
                         f"Overlapping contracts returned for {player.name} in {year}"
                     )
                 cap_hits[year] = cap_hit
+        active_contract = any(
+            term.start_year <= season_start_year < term.end_year
+            for term in terms
+        )
+        start_years = {
+            term.first_year
+            for term in terms
+            if term.cap_hits and term.first_year in seasons
+        }
+        if not active_contract:
+            start_years.add(season_start_year)
         rows.append([
             excel_hyperlink_formula(player.name),
             player.team,
@@ -65,6 +78,7 @@ def build_contract_grid(
             player.owner,
             player.roster_status,
             player.age if player.age is not None else "",
+            ", ".join(str(year) for year in sorted(start_years)),
             *(cap_hits.get(year, "") for year in seasons),
         ])
     for penalty in cap_hit_penalties:
@@ -75,6 +89,7 @@ def build_contract_grid(
             penalty.owner,
             "Cap Hit",
             "",
+            "",
             *(
                 penalty.amount
                 if penalty.start_year <= year <= penalty.end_year
@@ -84,7 +99,7 @@ def build_contract_grid(
         ])
     owner_column = headers.index("Owner")
     roster_status_column = headers.index("Roster Status")
-    first_contract_column = len(headers) - grid_years
+    first_contract_column = headers.index(season_label(season_start_year))
 
     def row_sort_key(row: Sequence[str | int]) -> tuple:
         first_cap_hit = row[first_contract_column]
@@ -111,13 +126,16 @@ def build_cap_summary(
 
     owner_column = headers.index("Owner")
     status_column = headers.index("Roster Status")
-    first_season_column = headers.index("Age") + 1
+    first_season_column = headers.index("Start Year") + 1
     season_headers = list(headers[first_season_column:])
-    owner_count = len({
-        str(row[owner_column])
-        for row in rows
-        if row[owner_column]
-    })
+    owners = sorted(
+        {
+            str(row[owner_column])
+            for row in rows
+            if row[owner_column]
+        },
+        key=str.casefold,
+    )
     last_source_row = len(rows) + 1
     sheet = "'" + source_worksheet.replace("'", "''") + "'"
 
@@ -138,11 +156,7 @@ def build_cap_summary(
         f"{sheet}!${status_letter}$2:${status_letter}${last_source_row}"
     )
     summary_rows: list[list[str | int]] = []
-    for excel_row in range(2, owner_count + 2):
-        owner_formula = (
-            "=IFERROR(INDEX(SORT(UNIQUE(FILTER("
-            f"{owner_range},{owner_range}<>\"\"))),ROW()-1),\"\")"
-        )
+    for excel_row, owner in enumerate(owners, start=2):
         totals = []
         for column in range(first_season_column, len(headers)):
             cap_letter = column_name(column)
@@ -155,7 +169,7 @@ def build_cap_summary(
                 for status in CAP_SUMMARY_STATUSES
             )
             totals.append(f'=IF($A{excel_row}="","",{sumifs})')
-        summary_rows.append([owner_formula, *totals])
+        summary_rows.append([owner, *totals])
     return ["Owner", *season_headers], summary_rows
 
 def write_grid_csv(

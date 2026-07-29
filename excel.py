@@ -162,6 +162,34 @@ class ExcelGraphPublisher:
         table = self._get_table()
         if table:
             table_id = quote(table["id"], safe="")
+            columns = self._request(
+                "GET",
+                f"tables/{table_id}/columns",
+            ).json().get("value", [])
+            existing_headers = [column.get("name") for column in columns]
+            desired_headers = list(values[0])
+            if existing_headers != desired_headers:
+                insertion_points = [
+                    index
+                    for index in range(len(desired_headers))
+                    if (
+                        desired_headers[:index] + desired_headers[index + 1:]
+                        == existing_headers
+                    )
+                ]
+                if len(insertion_points) != 1:
+                    raise RuntimeError(
+                        "Excel table columns do not match the contract grid"
+                    )
+                column_index = insertion_points[0]
+                self._request(
+                    "POST",
+                    f"tables/{table_id}/columns",
+                    json={
+                        "index": column_index,
+                        "name": desired_headers[column_index],
+                    },
+                )
             body_range = self._request(
                 "GET",
                 f"tables/{table_id}/dataBodyRange",

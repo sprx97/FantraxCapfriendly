@@ -72,6 +72,14 @@ def main() -> None:
         )
         print(f"Cached {cached_players} CapWages players")
     contract_provider = CachedCapWagesProvider(args.capwages_cache)
+    if not contract_provider.has_contract_boundaries:
+        print("Refreshing the legacy CapWages cache for contract start years...")
+        cached_players = refresh_capwages_cache(
+            args.capwages_cache,
+            args.season_start_year,
+        )
+        print(f"Cached {cached_players} CapWages players")
+        contract_provider = CachedCapWagesProvider(args.capwages_cache)
     print("Downloading Fantrax cap-hit penalties...")
     cap_hit_penalties = download_cap_hit_penalties(args.season_start_year)
     headers, rows = build_contract_grid(

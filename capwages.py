@@ -127,13 +127,27 @@ def _player_cache_record(
     if not slug or not raw_name:
         return None
     cap_hits: dict[int, int] = {}
+    contracts = []
     for contract in player.get("contracts") or []:
+        contract_hits: dict[int, int] = {}
         for detail in contract.get("details") or []:
             season = detail.get("season", "")
             match = re.fullmatch(r"(\d{4})-\d{2}", season)
             cap_hit = _parse_money(detail.get("capHit", ""))
             if match and cap_hit is not None:
-                cap_hits.setdefault(int(match.group(1)), cap_hit)
+                year = int(match.group(1))
+                contract_hits[year] = cap_hit
+                cap_hits.setdefault(year, cap_hit)
+        visible_hits = {
+            str(year): contract_hits[year]
+            for year in sorted(contract_hits)
+            if year >= season_start_year
+        }
+        if visible_hits:
+            contracts.append({
+                "start_year": min(contract_hits),
+                "cap_hits": visible_hits,
+            })
     future_hits = {
         str(year): cap_hits[year]
         for year in sorted(cap_hits)
@@ -145,6 +159,7 @@ def _player_cache_record(
         "team": player.get("currentTeamTricode") or fallback_team,
         "years_remaining": len(future_hits),
         "cap_hits": future_hits,
+        "contracts": contracts,
     }
     aliases = [
         alias
@@ -254,6 +269,9 @@ class CachedCapWagesProvider:
             self._by_team_last_name.setdefault(
                 (entry["team"], last_name), []
             ).append(entry)
+        self.has_contract_boundaries = all(
+            "contracts" in entry for entry in players
+        )
         self.unmatched_names: set[str] = set()
 
     @staticmethod
@@ -304,6 +322,27 @@ class CachedCapWagesProvider:
         }
         if not cap_hits:
             return ContractSnapshot(ContractTerm(season_start_year, ()))
+
+        cached_contracts = entry.get("contracts")
+        if cached_contracts:
+            terms = []
+            for contract in cached_contracts:
+                hits = {
+                    int(year): int(amount)
+                    for year, amount in contract.get("cap_hits", {}).items()
+                    if int(year) >= season_start_year
+                }
+                if not hits:
+                    continue
+                years = sorted(hits)
+                terms.append(ContractTerm(
+                    years[0],
+                    tuple(hits[year] for year in years),
+                    int(contract["start_year"]),
+                ))
+            terms.sort(key=lambda term: term.start_year)
+            if terms:
+                return ContractSnapshot(terms[0], tuple(terms[1:]))
 
         terms: list[ContractTerm] = []
         term_years: list[int] = []

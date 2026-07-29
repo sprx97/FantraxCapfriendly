@@ -16,6 +16,7 @@ class Player:
 class ContractTerm:
     start_year: int
     cap_hits: tuple[int, ...]
+    contract_start_year: int | None = None
 
     @property
     def years(self) -> int:
@@ -24,6 +25,16 @@ class ContractTerm:
     @property
     def end_year(self) -> int:
         return self.start_year + self.years
+
+    @property
+    def first_year(self) -> int:
+        """Return the true first year, including years before the grid."""
+
+        return (
+            self.contract_start_year
+            if self.contract_start_year is not None
+            else self.start_year
+        )
 
 @dataclass(frozen=True)
 class ContractSnapshot:
